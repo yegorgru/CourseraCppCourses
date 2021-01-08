@@ -7,6 +7,7 @@
 #include <set>
 #include <unordered_set>
 #include <utility>
+#include <list>
 
 using namespace std;
 
@@ -30,20 +31,31 @@ struct RecordHasher {
 };
 
 struct EraseHelper {
-    multimap<int, string>::iterator timestamp_it;
-    multimap<int, string>::iterator karma_it;
-    multimap<string, string>::iterator user_it;
+    multimap<int, std::list<std::pair<Record, EraseHelper>>::iterator>::iterator timestamp_it;
+    multimap<int, std::list<std::pair<Record, EraseHelper>>::iterator>::iterator karma_it;
+    multimap<string, std::list<std::pair<Record, EraseHelper>>::iterator>::iterator user_it;
 };
 
 class Database {
 public:
     bool Put(const Record& record) {
-       if (DATA.find(record) == DATA.end()) {
-            auto it1 = timestamp_id.insert({ record.timestamp,record.id });
-            auto it2 = karma_id.insert({ record.karma,record.id });
-            auto it3 = user_id.insert({ record.user,record.id });
-            DATA[record] = {it1,it2,it3};
-            return true;
+       if (id_data.find(record.id) == id_data.end()) {
+           DATA.push_back({ record,{
+               multimap<int, std::list<std::pair<Record, EraseHelper>>::iterator>::iterator(),
+               multimap<int, std::list<std::pair<Record, EraseHelper>>::iterator>::iterator(),
+               multimap<string, std::list<std::pair<Record, EraseHelper>>::iterator>::iterator()}
+               });
+           
+           std::list<std::pair<Record, EraseHelper>>::iterator it = DATA.end();
+           it--;
+           auto it1 = id_data.insert({ record.id,it });
+           auto it2 = timestamp_id.insert({ record.timestamp,it });
+           auto it3 = karma_id.insert({ record.karma,it });
+           auto it4 = user_id.insert({ record.user,it });
+           it->second.timestamp_it = it2;
+           it->second.karma_it = it3;
+           it->second.user_it = it4;
+           return true;
         }
         else {
             return false;
@@ -51,25 +63,26 @@ public:
     }
 
     const Record* GetById(const string& id) const {
-        auto it = DATA.find({ id,"","",0,0 });
-        if (it == DATA.end()) {
+        auto it = id_data.find(id);
+        if (it == id_data.end()) {
             return nullptr;
         }
         else {
-            return &(it->first);
+            return &(it->second->first);
         }
     }
      
     bool Erase(const string& id) {
-        auto it = DATA.find({ id,"","",0,0 });
-        if (it == DATA.end()) {
+        auto it = id_data.find(id);
+        if (it == id_data.end()) {
             return false;
         }
         else {
-            timestamp_id.erase(it->second.timestamp_it);
-            karma_id.erase(it->second.karma_it);
-            user_id.erase(it->second.user_it);
-            DATA.erase(it);
+            timestamp_id.erase(it->second->second.timestamp_it);
+            karma_id.erase(it->second->second.karma_it);
+            user_id.erase(it->second->second.user_it);
+            DATA.erase(it->second);
+            id_data.erase(it);
             return true;
         }
     }
@@ -77,7 +90,7 @@ public:
     template <typename Callback>
     void RangeByTimestamp(int low, int high, Callback callback) const {
         auto it = timestamp_id.lower_bound(low);
-        while (it != timestamp_id.end() && it->first <= high && callback(DATA.find({ it->second,"","",0,0 })->first)) {
+        while (it != timestamp_id.end() && it->first <= high && callback(it->second->first)) {
             it++;
         }
     }
@@ -85,7 +98,7 @@ public:
     template <typename Callback>
     void RangeByKarma(int low, int high, Callback callback) const {
         auto it = karma_id.lower_bound(low);
-        while (it != karma_id.end() && it->first <= high && callback(DATA.find({ it->second,"","",0,0 })->first)) {
+        while (it != karma_id.end() && it->first <= high && callback(it->second->first)) {
             it++;
         }
     }
@@ -93,17 +106,17 @@ public:
     template <typename Callback>
     void AllByUser(const string& user, Callback callback) const {
         auto it = user_id.lower_bound(user);
-        auto last_it = user_id.lower_bound(user+' ');
-        while (it != last_it && callback(DATA.find({ it->second,"","",0,0 })->first)) {
+        while (it != user_id.end() && it->first == user && callback(it->second->first)) {
             it++;
         }
     }
 
 private:
-    unordered_map<Record,EraseHelper,RecordHasher>DATA;
-    multimap<int, string>timestamp_id;
-    multimap<int, string>karma_id;
-    multimap<string, string>user_id;
+    std::list<std::pair<Record, EraseHelper>>DATA;
+    multimap<string, std::list<std::pair<Record, EraseHelper>>::iterator>id_data;
+    multimap<int, std::list<std::pair<Record, EraseHelper>>::iterator>timestamp_id;
+    multimap<int, std::list<std::pair<Record, EraseHelper>>::iterator>karma_id;
+    multimap<string, std::list<std::pair<Record, EraseHelper>>::iterator>user_id;
 };
 
 void TestRangeBoundaries() {

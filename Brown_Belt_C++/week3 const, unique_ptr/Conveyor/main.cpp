@@ -1,4 +1,4 @@
-﻿#include "test_runner.h"
+#include "test_runner.h"
 #include <functional>
 #include <memory>
 #include <sstream>

@@ -1,4 +1,4 @@
-﻿#include "Common.h"
+#include "Common.h"
 #include "test_runner.h"
 
 #include <sstream>
